@@ -5,6 +5,16 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
+	"hash"
+	"io"
+	"io/ioutil"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"sync"
+
 	"github.com/jfrog/jfrog-client-go/errors/httperrors"
 	"github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -13,14 +23,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/mholt/archiver"
-	"hash"
-	"io"
-	"io/ioutil"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
-	"sync"
 )
 
 func (jc *HttpClient) sendGetLeaveBodyOpen(url string, followRedirect bool, httpClientsDetails httputils.HttpClientDetails) (resp *http.Response, respBody []byte, redirectUrl string, err error) {
@@ -170,6 +172,33 @@ func (jc *HttpClient) UploadFile(localPath, url string, httpClientsDetails httpu
 		}
 		log.Warn("Upload attempt #", i, "to", url, "failed -", getFailureReason(resp, err))
 	}
+	return resp, body, err
+}
+
+func (jc *HttpClient) UploadFileWithTimeoutRetry(localPath, url string,
+	httpClientsDetails httputils.HttpClientDetails, retries int, interval int) (resp *http.Response, body []byte, err error) {
+
+	log.Debug("Uploading with retry", localPath, "to", url)
+
+	retryExecutor := utils.RetryExecutor{
+		MaxRetries:      retries,
+		RetriesInterval: interval,
+		ErrorMessage:    "Upload timed out",
+		ExecutionHandler: func() (bool, error) {
+			resp, body, err = jc.UploadFile(localPath, url, httpClientsDetails, 0)
+			if err != nil {
+				// Retry on timeout
+				if err, ok := err.(net.Error); ok && err.Timeout() {
+					return true, err
+				} else {
+					return false, err
+				}
+			}
+			return false, nil
+		},
+	}
+
+	err = retryExecutor.Execute()
 	return resp, body, err
 }
 
