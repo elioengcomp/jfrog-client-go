@@ -178,8 +178,6 @@ func (jc *HttpClient) UploadFile(localPath, url string, httpClientsDetails httpu
 func (jc *HttpClient) UploadFileWithTimeoutRetry(localPath, url string,
 	httpClientsDetails httputils.HttpClientDetails, retries int, interval int) (resp *http.Response, body []byte, err error) {
 
-	log.Debug("Uploading with retry", localPath, "to", url)
-
 	retryExecutor := utils.RetryExecutor{
 		MaxRetries:      retries,
 		RetriesInterval: interval,
