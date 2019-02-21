@@ -1,14 +1,15 @@
 package _go
 
 import (
+	"net/http"
+	"net/url"
+	"strings"
+
 	"github.com/jfrog/jfrog-client-go/artifactory/auth"
 	rthttpclient "github.com/jfrog/jfrog-client-go/artifactory/httpclient"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/version"
-	"net/http"
-	"net/url"
-	"strings"
 )
 
 func init() {
@@ -45,7 +46,12 @@ func (pwa *publishZipAndModApi) PublishPackage(params GoParams, client *rthttpcl
 	if err != nil {
 		return err
 	}
-	err = errorutils.CheckResponseStatus(resp, http.StatusCreated)
+
+	// Forbiden error might be received by a reattempt when the previous attempt
+	// times out even though it has been processed by the server, and the user
+	// does not have ovewrite permission. That is why we are expecting that error
+	// status here and proceeding with the mod file upload
+	err = errorutils.CheckResponseStatus(resp, http.StatusCreated, http.StatusForbidden)
 	if err != nil {
 		return err
 	}
